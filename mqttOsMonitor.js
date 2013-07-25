@@ -13,7 +13,6 @@ var Base = require('./base'),
         'c': 'Configuration file',
         'help': 'Show this help'
     })
-    .demand('c')
     .argv;
 
 if (myArgs.help) {
@@ -147,24 +146,18 @@ Monitor.prototype.handleMessage = function(topic, message, packet) {
     }
 }
 
-if (myArgs.c || myArgs.configFile) {
-    var configFile = myArgs.c || myArgs.configFile;
-    var defaults = {
-        host: 'localhost',
-        port: 1883,
-        topicRoot: 'monitoring',
-        checkInterval: 10000
-    };
-    Base.readConfig(configFile, defaults, function(err, config) {
-        if (err) {
-            Base.logger.info("Error reading config file %s: %s", configFile, err);
-            process.exit(-1);
-        }
-        var monitor = new Monitor(config);
-        monitor.connect();
-    });
-} else {
-    Base.logger.error("No config file specified");
-    optimist.showHelp();
-    process.exit(-1);
-}
+var configFile = myArgs.c || myArgs.configFile;
+var defaults = {
+    host: 'localhost',
+    port: 1883,
+    topicRoot: 'monitoring',
+    checkInterval: 10000
+};
+Base.readConfig(configFile, defaults, function(err, config) {
+    if (err) {
+        Base.logger.info("Error reading config file %s: %s", configFile, err);
+        process.exit(-1);
+    }
+    var monitor = new Monitor(config);
+    monitor.connect();
+});

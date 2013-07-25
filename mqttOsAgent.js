@@ -16,7 +16,6 @@ var Base = require('./base'),
         'c': 'Configuration file',
         'help': 'Show this help'
     })
-    .demand('c')
     .argv;
 
 if (myArgs.help) {
@@ -127,25 +126,20 @@ Agent.prototype.publishSystemInfo = function() {
     }, this.config.publishInterval);
 }
 
-if (myArgs.c || myArgs.configFile) {
-    var configFile = myArgs.c || myArgs.configFile;
-    var defaults = {
-        host: 'localhost',
-        port: 1883,
-        topicRoot: 'monitoring',
-        publishInterval: 5000,
-        reconnectInterval: 5000,
-        useMacAsId: false
-    };
-    Base.readConfig(configFile, defaults, function(err, config) {
-        if (err) {
-            Base.logger.info("Error reading config file %s: %s", configFile, err);
-            process.exit(-1);
-        }
-        var agent = new Agent(config);
-        agent.connect();
-    });
-} else {
-    Base.logger.error("No config file specified, exiting");
-    process.exit(-1);
-}
+var configFile = myArgs.c || myArgs.configFile;
+var defaults = {
+    host: 'localhost',
+    port: 1883,
+    topicRoot: 'monitoring',
+    publishInterval: 5000,
+    reconnectInterval: 5000,
+    useMacAsId: false
+};
+Base.readConfig(configFile, defaults, function(err, config) {
+    if (err) {
+        Base.logger.info("Error reading config file %s: %s", configFile, err);
+        process.exit(-1);
+    }
+    var agent = new Agent(config);
+    agent.connect();
+});

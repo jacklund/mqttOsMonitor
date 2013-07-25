@@ -86,18 +86,23 @@ function merge(data, defaults) {
 }
 
 Base.readConfig = function(filename, defaults, callback) {
-    require('fs').readFile(filename, 'utf8', function(err, data) {
-        if (err) {
-        	callback(err, null);
-        	return;
-        }
-        var config = merge(JSON.parse(data), defaults);
-        if (config.log4js) {
-            log4js.configure(config.log4js);
-        }
+    if (filename) {
+        require('fs').readFile(filename, 'utf8', function(err, data) {
+            if (err) {
+                callback(err, null);
+                return;
+            }
+            var config = merge(JSON.parse(data), defaults);
+            if (config.log4js) {
+                log4js.configure(config.log4js);
+            }
+            Base.logger = log4js.getLogger();
+            callback(null, config);
+        });
+    } else {
         Base.logger = log4js.getLogger();
-        callback(null, config);
-    });
+        callback(null, defaults);
+    }
 }
 
 function getErrnoDescription(err) {
