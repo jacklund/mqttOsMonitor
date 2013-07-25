@@ -7,12 +7,19 @@ var Base = require('./base'),
     .usage('MQTT System Monitor\nUsage: $0')
     .alias({
         'c': 'configFile',
+        'h': 'help'
     })
     .describe({
         'c': 'Configuration file',
         'help': 'Show this help'
     })
+    .demand('c')
     .argv;
+
+if (myArgs.help) {
+    optimist.showHelp();
+    process.exit(0);
+}
 
 function Monitor(config) {
     Base.call(this);
@@ -28,7 +35,7 @@ function Monitor(config) {
             }
             var topic = client.systemTopic;
             client.fromConfiguration = true;
-            client.availableTopic = util.format("/%s/%s/isUp", config.topicRoot, client.id);
+            client.availableTopic = getAvailableTopic(client.id);
             this.registeredClients[topic] = client;
         })
     }
@@ -41,11 +48,14 @@ function Monitor(config) {
 
 util.inherits(Monitor, Base);
 
+Monitor.prototype.getAvailableTopic = function(id) {
+    return util.format("/%s/%s/isUp", this.config.topicRoot, id);
+}
+
 Monitor.prototype.handleRegistration = function(topic, message) {
     var clientData = JSON.parse(message);
-    console.info("Got registration from %s", clientData.id);
     clientData.lastUpdate = this.getTimestamp();
-    clientData.availableTopic = util.format("/%s/%s/isUp", this.config.topicRoot, clientData.id);
+    clientData.availableTopic = this.getAvailableTopic(clientData.id);
     this.markClientAvailable(clientData, true);
     this.registeredClients[clientData.systemTopic] = clientData;
     this.client.subscribe(clientData.systemTopic);
@@ -60,7 +70,7 @@ Monitor.prototype.markClientAvailable = function(clientData, available) {
 
 Monitor.prototype.validateRegistration = function(clientData) {
     ['id', 'systemTopic', 'publishInterval'].forEach(function(name) {
-        if (clientData.keys.indexOf(name) == -1) {
+        if (Object.keys(clientData).indexOf(name) == -1) {
             if (name != 'id') {
                 this.logger.error("Error - registration for %s doesn't contain a %s", clientData.id, name);
             } else {
@@ -70,40 +80,61 @@ Monitor.prototype.validateRegistration = function(clientData) {
     });
 }
 
-function checkClients(self) {
-    self.logger.info("Checking clients");
-    var timestamp = self.getTimestamp();
-    var values = Object.keys(self.registeredClients).map(function (systemTopic) {
-        var clientData = self.registeredClients[systemTopic];
-        var diff = timestamp - clientData.lastUpdate;
-        if (clientData.markedAsUp) {
-            if (diff > 2 * clientData.publishInterval) {
-                self.logger.warn("Host %s seems to be down, marking it so", clientData.id);
-                self.markClientAvailable(clientData, false);
-            }
-        }
-        if (!clientData.fromConfiguration) {
-            if (diff > 5 * clientData.publishInterval) {
-                // Remove the client
-                delete self.registeredClients[systemTopic];
-            }
-        }
-    });
-}
-
 Monitor.prototype.handleConnect = function() {
+    var self = this;
     this.client.subscribe(this.registrationTopic);
+    this.client.subscribe(this.getAvailableTopic('+'));
     this.client.publish(util.format("/%s/reregister", this.config.topicRoot), "true");
-    this.timer = setInterval(checkClients, this.config.checkInterval, this);
+    this.timer = setInterval(function(self) {
+        self.logger.info("Checking clients");
+        var timestamp = self.getTimestamp();
+        var self = self;
+        var values = Object.keys(self.registeredClients).map(function (systemTopic) {
+            var clientData = self.registeredClients[systemTopic];
+            var diff = timestamp - clientData.lastUpdate;
+            if (clientData.markedAsUp) {
+                if (diff > 2 * clientData.publishInterval) {
+                    self.logger.warn("Host %s seems to be down, marking it so", clientData.id);
+                    self.markClientAvailable(clientData, false);
+                }
+            }
+            if (!clientData.fromConfiguration) {
+                if (diff > 5 * clientData.publishInterval) {
+                    // Remove the client
+                    delete self.registeredClients[systemTopic];
+                }
+            }
+        });
+    }, this.config.checkInterval, this);
 };
 
 Monitor.prototype.getTimestamp = function() {
     return new Date().getTime();
 }
 
+Monitor.prototype.isAvailableTopic = function(topic) {
+    return topic.match(/isUp$/) == 'isUp';
+}
+
 Monitor.prototype.handleMessage = function(topic, message, packet) {
+    var self = this;
     if (topic == this.registrationTopic) {
         this.handleRegistration(topic, message);
+    } else if (this.isAvailableTopic(topic)) {
+        if (message.length > 0) {
+            var found = false;
+            Object.keys(this.registeredClients).every(function(key) {
+                if (self.registeredClients[key].availableTopic == topic) {
+                    found = true;
+                    return false;
+                }
+                return true;
+            });
+            if (!found) {
+                this.logger.info("Removing topic %s", topic);
+                this.client.publish(topic, null, { retain: true });
+            }
+        }
     } else {
         var clientData = this.registeredClients[topic];
         if (clientData) {
@@ -118,7 +149,6 @@ Monitor.prototype.handleMessage = function(topic, message, packet) {
 
 if (myArgs.c || myArgs.configFile) {
     var configFile = myArgs.c || myArgs.configFile;
-    Base.logger.info("Reading configuration from %s", configFile);
     var defaults = {
         host: 'localhost',
         port: 1883,
@@ -134,6 +164,7 @@ if (myArgs.c || myArgs.configFile) {
         monitor.connect();
     });
 } else {
-    Base.logger.error("No config file specified, exiting");
+    Base.logger.error("No config file specified");
+    optimist.showHelp();
     process.exit(-1);
 }

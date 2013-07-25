@@ -10,12 +10,19 @@ var Base = require('./base'),
     .usage('MQTT System Agent\nUsage: $0')
     .alias({
         'c': 'configFile',
+        'h': 'help'
     })
     .describe({
         'c': 'Configuration file',
         'help': 'Show this help'
     })
+    .demand('c')
     .argv;
+
+if (myArgs.help) {
+    optimist.showHelp();
+    process.exit(0);
+}
 
 function Agent(config) {
     Base.call(this);
@@ -131,7 +138,6 @@ if (myArgs.c || myArgs.configFile) {
         useMacAsId: false
     };
     Base.readConfig(configFile, defaults, function(err, config) {
-        Base.logger.info("Reading configuration from %s", configFile);
         if (err) {
             Base.logger.info("Error reading config file %s: %s", configFile, err);
             process.exit(-1);
