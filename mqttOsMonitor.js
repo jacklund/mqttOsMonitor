@@ -28,10 +28,9 @@ function Monitor(config) {
     this.registeredClients = {}
     if (this.config.clients) {
         this.config.clients.forEach(function (client, index) {
-            if (!client.systemTopic || !client.id) {
-                this.logger.error("Configuration error, client has no id or systemTopic set");
+            if (!this.validateRegistration(client))
                 process.exit(-1);
-            }
+            handleRegistration(client);
             var topic = client.systemTopic;
             client.fromConfiguration = true;
             client.availableTopic = getAvailableTopic(client.id);
@@ -51,8 +50,8 @@ Monitor.prototype.getAvailableTopic = function(id) {
     return util.format("/%s/%s/isUp", this.config.topicRoot, id);
 }
 
-Monitor.prototype.handleRegistration = function(topic, message) {
-    var clientData = JSON.parse(message);
+Monitor.prototype.handleRegistration = function(clientData) {
+    this.logger.info("Received registration from %s", clientData.id);
     clientData.lastUpdate = this.getTimestamp();
     clientData.availableTopic = this.getAvailableTopic(clientData.id);
     this.markClientAvailable(clientData, true);
@@ -75,8 +74,11 @@ Monitor.prototype.validateRegistration = function(clientData) {
             } else {
                 this.logger.error("Error - registration doesn't contain a %s", name);
             }
+            return false;
         }
     });
+
+    return true;
 }
 
 Monitor.prototype.handleConnect = function() {
@@ -118,7 +120,8 @@ Monitor.prototype.isAvailableTopic = function(topic) {
 Monitor.prototype.handleMessage = function(topic, message, packet) {
     var self = this;
     if (topic == this.registrationTopic) {
-        this.handleRegistration(topic, message);
+        var clientData = JSON.parse(message);
+        if (this.validateRegistration(clientData)) this.handleRegistration(clientData);
     } else if (this.isAvailableTopic(topic)) {
         if (message.length > 0) {
             var found = false;
