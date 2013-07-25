@@ -43,7 +43,7 @@ util.inherits(Agent, Base);
 Agent.prototype.handleConnect = function() {
     this.registerWithMonitor();
     this.subscribeToReregister();
-    this.publishOSInfo();
+    this.info = this.createOSInfo();
     this.publishSystemInfo();
 }
 
@@ -95,7 +95,7 @@ Agent.prototype.subscribeToReregister = function() {
     this.client.subscribe(this.reregisterTopic);
 }
 
-Agent.prototype.publishOSInfo = function() {
+Agent.prototype.createOSInfo = function() {
     var osInfo = {};
     osInfo.hostname = os.hostname();
     osInfo.type = os.type();
@@ -103,25 +103,22 @@ Agent.prototype.publishOSInfo = function() {
     osInfo.arch = os.arch();
     osInfo.release = os.release();
     osInfo.macAddress = this.macAddress;
-    var topic = util.format("%s/osInfo", this.topicRoot);
-    this.logger.info("Publishing osInfo to %s", topic);
-    this.client.publish(topic, JSON.stringify(osInfo), {retain: true});
+    return osInfo;
 }
 
 Agent.prototype.publishSystemInfo = function() {
-    var self = this,
-        info = {};
-    this.timer = setInterval(function() {
-        info.uptime = os.uptime();
-        info.loadavg = os.loadavg();
-        info.totalmem = os.totalmem();
-        info.freemem = os.freemem();
-        info.cpus = os.cpus();
+    var self = this;
+    setInterval(function() {
+        self.info.uptime = os.uptime();
+        self.info.loadavg = os.loadavg();
+        self.info.totalmem = os.totalmem();
+        self.info.freemem = os.freemem();
+        self.info.cpus = os.cpus();
 
         self.getDiskSpace(function(values) {
-            if (values) info.disk = values;
+            if (values) self.info.disk = values;
             self.logger.info("Publishing systemInfo to %s", self.systemTopic);
-            self.client.publish(self.systemTopic, JSON.stringify(info));
+            self.client.publish(self.systemTopic, JSON.stringify(self.info));
         });
     }, this.config.publishInterval);
 }
