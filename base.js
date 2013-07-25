@@ -15,8 +15,6 @@ function Base() {
 
 module.exports = Base;
 
-Base.logger = log4js.getLogger();
-
 ['Connecting', 'Connected', 'Disconnected'].forEach(function(state, index) {
     Base.prototype[state] = Base[state] = index;
 });
@@ -93,7 +91,12 @@ Base.readConfig = function(filename, defaults, callback) {
         	callback(err, null);
         	return;
         }
-        callback(null, merge(JSON.parse(data), defaults));
+        var config = merge(JSON.parse(data), defaults);
+        if (config.log4js) {
+            log4js.configure(config.log4js);
+        }
+        Base.logger = log4js.getLogger();
+        callback(null, config);
     });
 }
 
